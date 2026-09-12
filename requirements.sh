@@ -4,23 +4,49 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-PYTHON="${PYTHON:-python3}"
 APP="${APP:-BEAR-C2.py}"
+VENV_DIR="${VENV_DIR:-.venv}"
+VENV_PYTHON="$SCRIPT_DIR/$VENV_DIR/bin/python"
 
 echo "=============================================="
 echo "        Python Build & Dependency Setup"
 echo "=============================================="
 
 # ------------------------------------------------
-# Check Python
+# Check system Python
 # ------------------------------------------------
 
-if ! command -v "$PYTHON" >/dev/null 2>&1; then
+if ! command -v python3 >/dev/null 2>&1; then
     echo "[!] Python 3 not found."
     exit 1
 fi
 
-echo "[+] Python: $($PYTHON --version)"
+echo "[+] System Python: $(python3 --version)"
+
+# ------------------------------------------------
+# Create virtual environment
+# ------------------------------------------------
+
+echo
+echo "[*] Checking virtual environment..."
+
+if [[ ! -x "$VENV_PYTHON" ]]; then
+    echo "[*] Creating virtual environment: $VENV_DIR"
+
+    python3 -m venv "$VENV_DIR" || {
+        echo
+        echo "[!] Failed to create virtual environment."
+        echo "[!] On Debian/Ubuntu, install:"
+        echo "    sudo apt install python3-venv"
+        exit 1
+    }
+
+    echo "[+] Virtual environment created."
+else
+    echo "[+] Virtual environment already exists."
+fi
+
+echo "[+] Venv Python: $("$VENV_PYTHON" --version)"
 
 # ------------------------------------------------
 # Update pip / build tools
@@ -29,8 +55,7 @@ echo "[+] Python: $($PYTHON --version)"
 echo
 echo "[*] Updating pip / setuptools / wheel..."
 
-"$PYTHON" -m pip install \
-    --break-system-packages \
+"$VENV_PYTHON" -m pip install \
     --upgrade \
     pip \
     setuptools \
@@ -43,8 +68,7 @@ echo "[*] Updating pip / setuptools / wheel..."
 echo
 echo "[*] Installing/updating dependencies..."
 
-"$PYTHON" -m pip install \
-    --break-system-packages \
+"$VENV_PYTHON" -m pip install \
     --upgrade \
     customtkinter \
     Pillow \
@@ -67,7 +91,7 @@ echo "[*] Installing/updating dependencies..."
 echo
 echo "[*] Verifying dependencies..."
 
-"$PYTHON" - <<'PY'
+"$VENV_PYTHON" - <<'PY'
 import importlib
 
 modules = [
@@ -125,15 +149,16 @@ fi
 
 echo "[*] Running syntax check..."
 
-"$PYTHON" -m py_compile "$APP"
+"$VENV_PYTHON" -m py_compile "$APP"
 
 echo "[+] Syntax check passed."
 
 # ------------------------------------------------
-# Check image folder (now inside Stagers-Loaders)
+# Check image folder
 # ------------------------------------------------
 
 IMAGE_DIR="Stagers-Loaders/image"
+
 if [[ -d "$IMAGE_DIR" ]]; then
     echo "[+] Image folder '$IMAGE_DIR' found – will be bundled."
 else
@@ -150,13 +175,13 @@ echo "[*] Cleaning previous PyInstaller output..."
 rm -rf build dist
 
 # ------------------------------------------------
-# Build executable (bundle image folder)
+# Build executable
 # ------------------------------------------------
 
 echo
 echo "[*] Building executable with embedded resources..."
 
-"$PYTHON" -m PyInstaller \
+"$VENV_PYTHON" -m PyInstaller \
     --onefile \
     --clean \
     --add-data "Stagers-Loaders/image:Stagers-Loaders/image" \
@@ -191,7 +216,7 @@ echo "[*] Cleaning build artifacts..."
 rm -rf build
 rm -rf dist
 rm -rf __pycache__
-rm -rf "$IMAGE_DIR"          
+rm -rf "$IMAGE_DIR"
 rm -f "${APP%.py}.spec"
 rm -f BEAR-C2.py
 
@@ -203,6 +228,9 @@ echo
 echo "=============================================="
 echo "[+] Build completed successfully."
 echo "=============================================="
+echo
+echo "[+] Virtual environment:"
+echo "    $SCRIPT_DIR/$VENV_DIR"
 echo
 echo "[+] Executable:"
 echo "    $SCRIPT_DIR/$EXECUTABLE"
